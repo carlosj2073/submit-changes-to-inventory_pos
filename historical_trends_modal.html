@@ -1,0 +1,178 @@
+
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+<div class="modal-body">
+    <h6>Select Metrics to Display on Dashboard:</h6>
+    <form id="dashboard-metrics-form">
+        <div class="form-group">
+            {% for metric in all_possible_metrics %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           id="metric-{{ metric.key }}" name="metrics" value="{{ metric.key }}"
+                           {# Pre-check based on current_dashboard_metrics_list passed from view #}
+                           {% if metric.key in current_dashboard_metrics_list %}checked{% endif %}>
+                    <label class="form-check-label" for="metric-{{ metric.key }}">
+                        {{ metric.name }}
+                    </label>
+                </div>
+            {% endfor %}
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="select-all-metrics">
+                <label class="form-check-label" for="select-all-metrics">
+                    Select All
+                </label>
+            </div>
+        </div>
+    </form>
+
+    <hr class="my-4">
+
+    <h6>Full Historical Data (Customized View):</h6>
+    <div class="table-responsive" id="modalHistoricalSummaryTableContainer">
+        <table class="table table-striped table-hover historical-trends-table">
+            <thead>
+                <tr id="modalTableHeaders"></tr>
+            </thead>
+            <tbody id="modalTableBody">
+            </tbody>
+        </table>
+        <div id="modalLoadingSpinner" class="loading-spinner-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading full historical data...</p>
+        </div>
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-primary" id="applyMetricsBtn">Apply Changes</button>
+</div>
+
+<script>
+    $(document).ready(function() {
+        const $metricsForm = $('#dashboard-metrics-form');
+        const $applyBtn = $('#applyMetricsBtn');
+        const $selectAllCheckbox = $('#select-all-metrics');
+        const $metricCheckboxes = $metricsForm.find('input[name="metrics"]');
+
+        // Initial state for "Select All"
+        function updateSelectAllState() {
+            const allChecked = $metricCheckboxes.length > 0 && $metricCheckboxes.length === $metricCheckboxes.filter(':checked').length;
+            $selectAllCheckbox.prop('checked', allChecked);
+        }
+
+        updateSelectAllState(); // Set on load
+
+        $selectAllCheckbox.on('change', function() {
+            $metricCheckboxes.prop('checked', this.checked);
+        });
+
+        $metricCheckboxes.on('change', function() {
+            updateSelectAllState();
+        });
+
+        // --- UPDATED: Function to fetch and render historical sales trends for the MODAL (Full Data View) ---
+        // Now accepts `metricsToDisplay` as a parameter
+        function fetchModalHistoricalSales(metricsToDisplay) {
+            const modalTableBody = document.getElementById('modalTableBody');
+            const modalTableHeaders = document.getElementById('modalTableHeaders');
+            const modalLoadingSpinner = document.getElementById('modalLoadingSpinner');
+            const modalTableContainer = document.getElementById('modalHistoricalSummaryTableContainer');
+
+            if (!modalTableBody || !modalTableHeaders || !modalLoadingSpinner || !modalTableContainer) {
+                console.error("Modal historical trends elements not found.");
+                return;
+            }
+
+            modalLoadingSpinner.style.display = 'flex';
+            modalTableContainer.style.display = 'none';
+
+            // `companyId` is a global variable from the parent page
+            if (typeof companyId === 'undefined') {
+                console.error("companyId is not defined. Cannot fetch modal historical data.");
+                modalLoadingSpinner.innerHTML = `<p class="text-danger text-center py-5">Error: Company ID not available.</p>`;
+                return;
+            }
+
+            // Use the passed `metricsToDisplay` for the API call
+            const apiUrl = `/inventory/${companyId}/api/all_monthly_sales_trends/?metrics=${metricsToDisplay}`;
+
+            fetch(apiUrl)
+              .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+              })
+              .then(data => {
+                const trendData = data.data || [];
+                const metricsOrder = data.metrics_order || [];
+
+                if (trendData.length === 0) {
+                    modalLoadingSpinner.innerHTML = `<p class="text-muted text-center py-5">No full historical data available.</p>`;
+                    return;
+                }
+
+                let headersHtml = '<th>Month/Year</th>';
+                const friendlyHeaders = { revenue: 'Revenue', net_profit: 'Net Profit', quantity_sold: 'Quantity Sold', cogs: 'COGS' };
+                metricsOrder.forEach(metric => {
+                  headersHtml += `<th>${friendlyHeaders[metric] || metric}</th>`;
+                });
+                modalTableHeaders.innerHTML = headersHtml;
+
+                let tableBodyHtml = '';
+                trendData.forEach(rowData => {
+                    let row = `<tr><td>${rowData.period}</td>`;
+                    metricsOrder.forEach(metric => {
+                        let value = rowData[metric] || 0;
+                        if (metric === 'revenue' || metric === 'net_profit' || metric === 'cogs') {
+                            row += `<td>$${value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                        } else if (metric === 'quantity_sold') {
+                            row += `<td>${value.toLocaleString('en-US')}</td>`;
+                        } else {
+                            row += `<td>${value}</td>`;
+                        }
+                    });
+                    row += `</tr>`;
+                    tableBodyHtml += row;
+                });
+                modalTableBody.innerHTML = tableBodyHtml;
+
+                modalLoadingSpinner.style.display = 'none';
+                modalTableContainer.style.display = 'block';
+              })
+              .catch(error => {
+                console.error("Error fetching modal historical sales data:", error);
+                modalLoadingSpinner.innerHTML = `<p class="text-danger text-center py-5">Failed to load full historical data.</p>`;
+              });
+        }
+
+        $applyBtn.on('click', function() {
+            const selectedMetrics = [];
+            $metricsForm.find('input[name="metrics"]:checked').each(function() {
+                selectedMetrics.push($(this).val());
+            });
+            const metricsString = selectedMetrics.join(',');
+
+            // NO LONGER CLOSING THE MODAL HERE!
+            // $('#historicalTrendsModal').modal('hide'); // <--- REMOVED THIS LINE
+
+            // Update the dashboard's table
+            if (typeof updateDashboardTrends === 'function') {
+                updateDashboardTrends(metricsString);
+            } else {
+                console.error("updateDashboardTrends function not found. Dashboard will not refresh.");
+            }
+
+            // Update the modal's full historical data table with the newly selected metrics
+            fetchModalHistoricalSales(metricsString);
+        });
+
+        // Initial call: Fetch full historical data based on currently checked boxes
+        // This ensures the modal's table reflects the dashboard's state when first opened
+        const initialSelectedMetrics = [];
+        $metricsForm.find('input[name="metrics"]:checked').each(function() {
+            initialSelectedMetrics.push($(this).val());
+        });
+        fetchModalHistoricalSales(initialSelectedMetrics.join(','));
+    });
+</script>
