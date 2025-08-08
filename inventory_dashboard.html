@@ -1,0 +1,537 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    /* Color Palette - Updated to match new style requirements */
+    :root {
+        --bg-light: #f8f9fa;
+        --card-bg: #ffffff;
+        --primary-blue: #007bff; /* Still used for general buttons */
+        --dark-blue: #003366; /* Used for main titles and some text */
+        --text-primary: #343a40;
+        --text-secondary: #6c757d;
+        --border-color: #dee2e6;
+        --shadow-color: rgba(0, 0, 0, 0.05);
+        --glow-blue: rgba(0, 123, 255, 0.2);
+
+        /* Specific colors for sales, profit, average, highest */
+        --sales-color: #007bff; /* Primary Blue for Sales */
+        --profit-color: #3498db; /* A slightly lighter blue for Profit */
+        --average-color: #6c757d; /* Dark gray for Average */
+        --highest-color: #0e8b05; /* Green for Highest */
+
+        /* KPI Card Accent Colors from new style */
+        --kpi-inventory-color: #3b82f6; /* Blue */
+        --kpi-stock-color: #3b82f6; /* Blue, same as inventory */
+        --kpi-orders-color: #3b82f6; /* Green */
+        --kpi-low-stock-color: #FFA500; /* Orange */
+    }
+
+    /* Base Styles - Adapted from new style */
+    body {
+        margin: 0;
+        font-family: 'Roboto', sans-serif; /* Consistent font family */
+        background: radial-gradient(circle, #e3f2fd, #bbdefb); /* New background gradient */
+        min-height: 100vh; /* Ensure full height but allow scrolling */
+        overflow-x: hidden; /* Prevent horizontal scroll */
+        color: var(--text-primary);
+        padding: 0;
+    }
+
+    .dashboard-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem; /* Reduced space between major sections */
+        box-sizing: border-box;
+    }
+
+    /* Hero Section - Enhanced to match new header style */
+    .hero-section {
+        background: var(--card-bg);
+        padding: 30px 20px; /* Increased padding */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2); /* Stronger shadow */
+        margin-bottom: 20px; /* Reduced margin-bottom */
+        color: var(--dark-blue);
+        border-radius: 20px; /* Unified rounded corners */
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-section h1 {
+        font-size: 2.5rem; /* Larger title */
+        font-weight: 700;
+        margin-bottom: 10px;
+        color: var(--dark-blue);
+    }
+
+    .hero-section p {
+        font-size: 1rem; /* Clearer welcome message */
+        margin-top: 5px;
+        opacity: 0.9;
+        color: var(--text-secondary);
+    }
+    
+    /* New styling for company name */
+    .company-title-personal {
+        font-family: 'Georgia', serif; /* Different font for personalization */
+        color: #4c89f1; /* Deep green for contrast and personal touch */
+        font-weight: 700; /* Ensure it stands out */
+    }
+
+
+    /* KPI Grid - Adapted from new kpi-section style */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Adjusted min-width for better fit */
+        gap: 20px; /* Reduced gap between cards */
+        margin-bottom: 20px; /* Reduced margin-bottom */
+    }
+
+    .kpi-card {
+        background: var(--card-bg);
+        padding: 20px 15px; /* Adjusted padding to be smaller */
+        border-radius: 15px; /* Softer rounded corners */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1); /* Stronger shadow */
+        text-align: center;
+        border-left: 6px solid transparent; /* Thicker border for pop */
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-decoration: none; /* Remove underline from links */
+        color: inherit; /* Inherit text color */
+
+        /* Flexbox for consistent height and centering content */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-8px); /* More pronounced lift */
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15); /* Even stronger shadow on hover */
+    }
+
+    /* Accent color for specific KPI cards */
+    .kpi-card.inventory-value { --card-accent-color: var(--kpi-inventory-color); border-left-color: var(--kpi-inventory-color); }
+    .kpi-card.items-in-stock { --card-accent-color: var(--kpi-stock-color); border-left-color: var(--kpi-stock-color); }
+    .kpi-card.orders-to-fulfill { --card-accent-color: var(--kpi-orders-color); border-left-color: var(--kpi-orders-color); }
+    .kpi-card.low-stock { --card-accent-color: var(--kpi-low-stock-color); border-left-color: var(--kpi-low-stock-color); }
+
+
+    .kpi-card::before { /* Decorative element */
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 10px;
+      background: var(--card-accent-color, transparent); /* Use CSS variable */
+      transition: height 0.3s ease-in-out;
+    }
+
+    .kpi-card:hover::before {
+        height: 100%; /* Fill on hover */
+        opacity: 0.05; /* Subtle overlay */
+    }
+
+    /* KPI Value and Title/Detail - Adapted from new stat-number and stat-label */
+    .kpi-value {
+        font-size: 2.2rem; /* Larger numbers */
+        font-weight: 800; /* Bolder */
+        margin-bottom: 5px; /* Reduced margin */
+        line-height: 1;
+        color: var(--text-primary); /* Default color */
+    }
+    
+    .kpi-card.inventory-value .kpi-value,
+    .kpi-card.items-in-stock .kpi-value {
+        color: var(--kpi-inventory-color); /* Blue for these KPIs */
+    }
+    .kpi-card.orders-to-fulfill .kpi-value {
+        color: var(--kpi-orders-color); /* Green for orders */
+    }
+    .kpi-card.low-stock .kpi-value {
+        color: var(--kpi-low-stock-color); /* Orange for low stock */
+    }
+
+    .kpi-title {
+        color: #4a5568; /* Slightly darker label */
+        font-size: 0.8rem; /* Slightly larger label */
+        font-weight: 600; /* Bolder label */
+        margin-bottom: 5px; /* Reduced margin */
+    }
+    .kpi-icon {
+        font-size: 2rem; /* Larger icons */
+        margin-right: 0;
+        margin-bottom: 0.5rem; /* Adjusted spacing */
+        color: var(--primary-blue); /* Default icon color */
+    }
+    .kpi-card.inventory-value .kpi-icon,
+    .kpi-card.items-in-stock .kpi-icon {
+        color: var(--kpi-inventory-color);
+    }
+    .kpi-card.orders-to-fulfill .kpi-icon {
+        color: var(--kpi-orders-color);
+    }
+    .kpi-card.low-stock .kpi-icon {
+        color: var(--kpi-low-stock-color);
+    }
+
+    /* Quick Actions */
+    .actions-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 15px; /* Softer rounded corners */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1); /* Consistent shadow */
+        padding: 1rem;
+        height: 100%;
+        box-sizing: border-box;
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--dark-blue);
+        margin-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+    }
+
+    /* Action Buttons */
+    .action-button-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .btn {
+        background: var(--primary-blue);
+        color: #fff;
+        border: none;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .btn:hover {
+        background: var(--dark-blue);
+        box-shadow: 0 4px 15px var(--glow-blue);
+    }
+
+    /* Main Content Area */
+    .main-content-area {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .info-actions-container {
+        display: grid;
+        grid-template-columns: 3fr 1fr;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    /* Progress Bars and Captions */
+    .daily-snapshot-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 15px; /* Consistent rounded corners */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1); /* Consistent shadow */
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .daily-metric {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .metric-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+
+    .metric-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--dark-blue);
+    }
+
+    .metric-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.1;
+    }
+
+    .progress-bar-container {
+        position: relative;
+        height: 1.25rem;
+        background-color: var(--bg-light);
+        border-radius: 0.625rem;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        transition: width 0.5s ease-in-out;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Keyframes for the fluid animation */
+    @keyframes move-bg {
+        0% { background-position: 0% 0%; }
+        100% { background-position: 100% 0%; }
+    }
+
+    .sales-bar {
+        background-color: var(--sales-color);
+    }
+
+    .sales-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 200%;
+        height: 100%;
+        background: linear-gradient(
+            to right,
+            var(--sales-color) 20%,
+            rgba(255, 255, 255, 0.4) 60%,
+            var(--sales-color) 100%
+        );
+        background-size: 50% 100%;
+        animation: move-bg 2s linear infinite;
+        opacity: 0.9;
+    }
+
+    .profit-bar {
+        background-color: var(--profit-color);
+    }
+    
+    .profit-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 200%;
+        height: 100%;
+        background: linear-gradient(
+            to right,
+            var(--profit-color) 20%,
+            rgba(255, 255, 255, 0.4) 60%,
+            var(--profit-color) 100%
+        );
+        background-size: 50% 100%;
+        animation: move-bg 2s linear infinite;
+        opacity: 0.9;
+    }
+
+    .average-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background-color: var(--average-color);
+        opacity: 0.8;
+        z-index: 1;
+    }
+
+    .highest-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background-color: var(--highest-color);
+        z-index: 2;
+    }
+
+    /* New Caption Styling */
+    .benchmark-caption {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+    }
+    .caption-average {
+        color: var(--average-color);
+        font-weight: 600;
+    }
+    .caption-highest {
+        color: var(--highest-color);
+        font-weight: 600;
+    }
+
+    /* Mobile Responsive Adjustments (from provided style) */
+    @media (max-width: 800px) {
+        .kpi-grid {
+            grid-template-columns: 1fr; /* Stack KPIs on very small screens */
+            gap: 15px;
+        }
+        .info-actions-container {
+            grid-template-columns: 1fr; /* Stack daily snapshot and quick actions */
+        }
+        .hero-section {
+            padding: 1.5rem;
+            margin-bottom: 15px;
+        }
+        .hero-section h1 {
+            font-size: 2rem;
+        }
+        .hero-section p {
+            font-size: 0.8rem;
+        }
+        .kpi-card {
+            padding: 20px;
+        }
+        .kpi-value {
+            font-size: 1.8rem;
+        }
+        .kpi-icon {
+            font-size: 1.8rem;
+        }
+        .daily-snapshot-card, .actions-card {
+            padding: 0.75rem;
+            gap: 0.75rem;
+        }
+        .metric-title {
+            font-size: 0.9rem;
+        }
+        .metric-value {
+            font-size: 1.1rem;
+        }
+        .progress-bar-container {
+            height: 1rem;
+        }
+        .benchmark-caption {
+            font-size: 0.7rem;
+        }
+        .btn {
+            padding: 0.6rem 0.8rem;
+            font-size: 0.9rem;
+        }
+    }
+</style>
+<div class="dashboard-container">
+
+    <div class="hero-section">
+        <h1><span class="company-title-personal">{{ company.name }}</span> Dashboard Overview</h1>
+        <p>Welcome, {{ request.user.username }}. Here is a summary of your key business metrics.</p>
+    </div>
+
+    <div class="main-content-area">
+        <div class="kpi-grid">
+            <a href="{% url 'your_analytics_insights_page' %}" class="kpi-card inventory-value">
+                <div class="kpi-header">
+                    <i class="bi bi-wallet2 kpi-icon"></i>
+                    <h3 class="kpi-title">Inventory Value</h3>
+                </div>
+                <div class="kpi-value">${{ kpi_data.inventory_value|floatformat:2 }}</div>
+                <p class="kpi-detail">Current total value of all stock.</p>
+            </a>
+
+            <a href="{% url 'view_products' %}" class="kpi-card items-in-stock">
+                <div class="kpi-header">
+                    <i class="bi bi-boxes kpi-icon"></i>
+                    <h3 class="kpi-title">Items in Stock</h3>
+                </div>
+                <div class="kpi-value">{{ kpi_data.items_in_stock }}</div>
+                <p class="kpi-detail">Total number of all items on hand.</p>
+            </a>
+
+            <a href="{% url 'view_orders' %}" class="kpi-card orders-to-fulfill">
+                <div class="kpi-header">
+                    <i class="bi bi-truck kpi-icon"></i>
+                    <h3 class="kpi-title">Orders to Fulfill</h3>
+                </div>
+                <div class="kpi-value">{{ kpi_data.orders_to_fulfill }}</div>
+                <p class="kpi-detail">Pending orders that need to be shipped.</p>
+            </a>
+
+            <a href="{% url 'your_analytics_insights_page' %}" class="kpi-card low-stock">
+                <div class="kpi-header">
+                    <i class="bi bi-exclamation-triangle kpi-icon"></i>
+                    <h3 class="kpi-title">Low Stock Alerts</h3>
+                </div>
+                <div class="kpi-value">{{ kpi_data.low_stock_alerts }}</div>
+                <p class="kpi-detail">Items that require immediate attention.</p>
+            </a>
+        </div>
+        
+        <div class="info-actions-container">
+            <div class="daily-snapshot-card">
+                <h2 class="card-title">Daily Snapshot</h2>
+                
+                <div class="daily-metric">
+                    <div class="metric-header">
+                        <span class="metric-title">Sales Today</span>
+                        <span class="metric-value">${{ daily_snapshot.sales_today|floatformat:2 }}</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar sales-bar" style="width: {{ daily_snapshot.sales_percentage }}%;"></div>
+                        <div class="average-line" style="left: {{ daily_snapshot.avg_sales_percentage }}%;"></div>
+                        <div class="highest-line" style="left: {{ daily_snapshot.highest_sales_percentage }}%;"></div>
+                    </div>
+                    <div class="benchmark-caption">
+                        <span class="caption-average">Avg: ${{ daily_snapshot.avg_daily_sales|floatformat:2 }}</span>
+                        <span class="caption-highest">Highest: ${{ daily_snapshot.highest_daily_sales|floatformat:2 }}</span>
+                    </div>
+                </div>
+
+                <div class="daily-metric">
+                    <div class="metric-header">
+                        <span class="metric-title">Profit Today</span>
+                        <span class="metric-value">${{ daily_snapshot.profit_today|floatformat:2 }}</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar profit-bar" style="width: {{ daily_snapshot.profit_percentage }}%;"></div>
+                        <div class="average-line" style="left: {{ daily_snapshot.avg_profit_percentage }}%;"></div>
+                        <div class="highest-line" style="left: {{ daily_snapshot.highest_profit_percentage }}%;"></div>
+                    </div>
+                    <div class="benchmark-caption">
+                        <span class="caption-average">Avg: ${{ daily_snapshot.avg_daily_profit|floatformat:2 }}</span>
+                        <span class="caption-highest">Highest: ${{ daily_snapshot.highest_daily_profit|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="actions-card">
+                <h2 class="card-title">Quick Actions</h2>
+                <div class="action-button-group">
+                    <a href="{% url 'add_sales_stock' %}" class="btn">
+                        <i class="bi bi-plus-circle"></i> Add Sales / Stock
+                    </a>
+                    <a href="{% url 'view_products' %}" class="btn">
+                        <i class="bi bi-box"></i> My Products
+                    </a>
+                    <a href="{% url 'your_analytics_insights_page' %}" class="btn">
+                        <i class="bi bi-graph-up-arrow"></i> Analytics & Insights
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
