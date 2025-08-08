@@ -1,0 +1,128 @@
+
+@login_required(login_url="account_login")
+def index(request):
+    print("\n--- inventory_app.views.index accessed ---")
+    
+    company, user_profile, has_company = get_user_company(request)
+
+    if not has_company:
+        messages.info(request, "Please set up or join a company to access the inventory dashboard.")
+        return redirect('accounts:company_setup')
+    
+    kpi_data = {
+        'inventory_value': Product.objects.filter(company=company).aggregate(total=Sum(F('stock') * F('price')))['total'] or Decimal('0.00'),
+        'items_in_stock': Product.objects.filter(company=company).aggregate(total=Sum('stock'))['total'] or 0,
+        'orders_to_fulfill': Orders.objects.filter(company=company, status='pending').count(),
+        'low_stock_alerts': Product.objects.filter(company=company, stock__lte=F('low_stock_input')).count(),
+    }
+    
+    today = timezone.localdate()
+
+    sales_today = Orders.objects.filter(
+        company=company, 
+        status='paid', 
+        order_date__date=today
+    ).aggregate(
+        total_sales=Sum('final_amount')
+    )['total_sales'] or Decimal('0.00')
+
+    profit_today_agg = Order_Items.objects.filter(
+        order__company=company, 
+        order__status='paid', 
+        order__order_date__date=today
+    ).aggregate(
+        total_profit=Sum(
+            ExpressionWrapper(
+                F('quantity') * (F('price') - F('product__cost')),
+                output_field=DecimalField()
+            )
+        )
+    )
+    profit_today = profit_today_agg['total_profit'] or Decimal('0.00')
+
+    daily_sales_history = Orders.objects.filter(
+        company=company, 
+        status='paid'
+    ).annotate(
+        day=TruncDay('order_date')
+    ).values('day').annotate(
+        daily_total_sales=Sum('final_amount')
+    ).order_by('day')
+
+    avg_daily_sales = daily_sales_history.aggregate(
+        avg_sales=Avg('daily_total_sales')
+    )['avg_sales'] or Decimal('0.00')
+
+    highest_daily_sales = daily_sales_history.aggregate(
+        max_sales=Max('daily_total_sales')
+    )['max_sales'] or Decimal('0.00')
+
+    daily_profit_history = Order_Items.objects.filter(
+        order__company=company, 
+        order__status='paid'
+    ).annotate(
+        day=TruncDay('order__order_date')
+    ).values('day').annotate(
+        daily_total_profit=Sum(
+            ExpressionWrapper(
+                F('quantity') * (F('price') - F('product__cost')),
+                output_field=DecimalField()
+            )
+        )
+    ).order_by('day')
+
+    avg_daily_profit = daily_profit_history.aggregate(
+        avg_profit=Avg('daily_total_profit')
+    )['avg_profit'] or Decimal('0.00')
+
+    highest_daily_profit = daily_profit_history.aggregate(
+        max_profit=Max('daily_total_profit')
+    )['max_profit'] or Decimal('0.00')
+
+    # Calculate a new scale value that is 10% larger than the highest sales.
+    # This ensures the progress bar is always long enough to show the highest sales line.
+    scale_value = highest_daily_sales * Decimal('1.1') if highest_daily_sales > 0 else Decimal('1.0')
+
+    sales_percentage = 0
+    avg_sales_percentage = 0
+    highest_sales_percentage = 0
+    
+    profit_percentage = 0
+    avg_profit_percentage = 0
+    highest_profit_percentage = 0
+
+    if scale_value > 0:
+        sales_percentage = (sales_today / scale_value) * 100
+        avg_sales_percentage = (avg_daily_sales / scale_value) * 100
+        highest_sales_percentage = (highest_daily_sales / scale_value) * 100
+        
+        profit_percentage = (profit_today / scale_value) * 100
+        avg_profit_percentage = (avg_daily_profit / scale_value) * 100
+        highest_profit_percentage = (highest_daily_profit / scale_value) * 100
+        
+    # Cap the sales and profit percentages at 100% to prevent the bar from overflowing.
+    sales_percentage = min(sales_percentage, 100)
+    profit_percentage = min(profit_percentage, 100)
+
+    context = {
+        'kpi_data': kpi_data,
+        'company': company,
+        'daily_snapshot': {
+            'sales_today': sales_today,
+            'profit_today': profit_today,
+            'avg_daily_sales': avg_daily_sales,
+            'highest_daily_sales': highest_daily_sales,
+            'avg_daily_profit': avg_daily_profit,
+            'highest_daily_profit': highest_daily_profit,
+            
+            'sales_percentage': round(sales_percentage, 2),
+            'avg_sales_percentage': round(avg_sales_percentage, 2),
+            'highest_sales_percentage': round(highest_sales_percentage, 2),
+            
+            'profit_percentage': round(profit_percentage, 2),
+            'avg_profit_percentage': round(avg_profit_percentage, 2),
+            'highest_profit_percentage': round(highest_profit_percentage, 2),
+        }
+    }
+    
+    return render(request, 'inventory_dashboard.html', context)
